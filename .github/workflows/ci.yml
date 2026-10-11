@@ -1,0 +1,23 @@
+# Checks for this repo come from https://github.com/buildthehomelab/wow-ci.
+# They pick themselves based on what the repo contains (C++, SQL, Lua/.toc, PHP, shell, Python).
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: buildthehomelab/wow-ci/.github/workflows/ci.yml@main
+    permissions:
+      contents: read
+      packages: read
+#   with:
+#     module: mod-foo          # only if the server folder isn't the repo name minus "wow-"
+#     lua-exclude: "Astrolabe/**"

@@ -1,0 +1,36 @@
+[worldserver]
+
+########################################
+# mod-forever-torch
+#
+# The Night Watchman's Torch: a torch players carry that lights the ground around them.
+########################################
+
+#
+#    ForeverTorch.Enable
+#        Description: Master switch. With 0 the torch can't be lit and the fallen watchman hands
+#                     out no spare torches. A torch that is already burning burns out by itself.
+#                     The watchman, his quest and the item are rows in the world database and
+#                     stay: remove those with the module's uninstall SQL.
+#        Default:     1
+#
+
+ForeverTorch.Enable = 1
+
+#
+#    ForeverTorch.AllowInCities
+#        Description: Let the torch be lit and stay lit in capital cities. With 0 it can't be
+#                     lit there and goes out when its bearer enters one.
+#        Default:     0
+#
+
+ForeverTorch.AllowInCities = 0
+
+#
+#    ForeverTorch.AllowInCombat
+#        Description: Let the torch be lit and stay lit in combat. With 0 it can't be lit in
+#                     combat and goes out when its bearer enters combat.
+#        Default:     0
+#
+
+ForeverTorch.AllowInCombat = 0
