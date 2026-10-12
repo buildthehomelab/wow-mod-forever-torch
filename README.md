@@ -12,22 +12,23 @@ whose client has dark nights; see [Dark nights](#dark-nights).
 | | |
 | --- | --- |
 | Item | Night Watchman's Torch: bind on pickup, unique, not used up |
-| Carried | With the torch in your bags it is in your hand whenever your weapons are sheathed. No timer |
-| Use | Takes the torch out again after you put it away. 30 second cooldown |
+| Carried | From dusk to dawn (19:00 to 06:00 server time), with the torch in your bags, it is in your hand whenever your weapons are sheathed. No timer |
+| Use | By day: lights the torch for 5 minutes. At night: takes it out again after you put it away. 30 second cooldown |
 | Light | Warm orange, strongest at your feet, gone at 22 yards. Everyone nearby sees it |
 | Hand | Left. A weapon in the right hand stays visible |
 | Put away | While your weapons are drawn (melee or ranged), in combat, while swimming, in a capital city, in an animal form, in stealth, in a vehicle. It comes back out by itself |
 | Can't be lit | In combat, while swimming, in a capital city |
 
-Press your sheathe key (Z by default) to put your weapons away and take the torch out, and again
-to swap back. After a fight the torch returns when your character sheathes its weapons.
+At night, press your sheathe key (Z by default) to put your weapons away and take the torch out,
+and again to swap back. After a fight the torch returns when your character sheathes its weapons.
+At dawn the carried torch is put away, and it comes out again at dusk.
 
 Right-click the buff to put the torch away for good. It stays away, through logging out, until
 you use the item. A torch in the bank is not carried either.
 
-Carrying is a setting, and so are the combat and city rules. With carrying off, or outside the
-night hours when it is set to nights only, using the torch lights it for 5 minutes, and it goes
-out for good when you enter combat, start swimming or enter a capital city.
+Carrying is a setting, and so are its hours and the combat and city rules. By day, or with
+carrying off, using the torch lights it for 5 minutes, and it goes out for good when you enter
+combat, start swimming or enter a capital city.
 
 ## Where it comes from
 
@@ -92,7 +93,7 @@ Give players the new patch in place of the old one. Needs Python 3 and
 | `ForeverTorch.AllowInCities` | `0` | With `1` it can be lit and stays lit in capital cities |
 | `ForeverTorch.AllowInCombat` | `0` | With `1` it can be lit and stays lit in combat. A carried torch is still put away while weapons are drawn |
 | `ForeverTorch.Carry.Enable` | `1` | Carry the torch whenever weapons are sheathed. With `0` it is only lit by using it |
-| `ForeverTorch.Carry.NightOnly` | `0` | With `1` it is only carried at night |
+| `ForeverTorch.Carry.NightOnly` | `1` | Only carry it at night. With `0` it is carried at any hour |
 | `ForeverTorch.Carry.NightStart` / `NightEnd` | `19` / `6` | The night for `NightOnly`, in hours of server time |
 
 All of them reload with `.reload config`.
@@ -147,11 +148,12 @@ On the characters database, ``DELETE FROM `character_settings` WHERE `source` =
 - **He's there but floats, or is sunk into the ground:** tell us which spot. The heights come
   from the client's terrain data and have not all been checked in game.
 - **"You can't do that here":** you're in a capital city.
-- **The torch isn't in my hand:** your weapons are drawn (press Z), the torch is in the bank, or
-  you put it away by right-clicking the buff: use the item. In a capital city, in water and in
-  animal forms it stays away.
-- **The torch has a 5 minute timer:** you don't have a torch in your bags, carrying is off, or it
-  is daytime with `ForeverTorch.Carry.NightOnly = 1`.
+- **The torch isn't in my hand:** it is daytime (it is carried from 19:00 to 06:00 server time),
+  your weapons are drawn (press Z), the torch is in the bank, or you put it away by
+  right-clicking the buff: use the item. In a capital city, in water and in animal forms it
+  stays away.
+- **The torch has a 5 minute timer:** it is daytime, you don't have a torch in your bags, or
+  carrying is off.
 - **The torch never goes out in combat or in cities:** the module isn't built in, or
   `ForeverTorch.AllowInCombat` / `AllowInCities` is `1`. Look for the `mod-forever-torch:` line
   in the worldserver log.
@@ -161,9 +163,9 @@ On the characters database, ``DELETE FROM `character_settings` WHERE `source` =
 
 Category: World
 
-- Added the **Night Watchman's Torch**. With it in your bags you carry a lit torch in your off
-  hand whenever your weapons are sheathed. The torch lights the ground around you and can be
-  seen by other players.
+- Added the **Night Watchman's Torch**. From dusk to dawn, with it in your bags, you carry a lit
+  torch in your off hand whenever your weapons are sheathed. By day, use it to light it for 5
+  minutes. The torch lights the ground around you and can be seen by other players.
 - The torch is put away when you draw your weapons, enter combat, start swimming or enter a
   capital city, and comes back out afterwards. Right-click the buff to put it away for good; use
   the torch to take it out again.

@@ -12,8 +12,8 @@
  *
  * The same three things stop it being lit, in the spell script's cast check.
  *
- * Carrying (ForeverTorch.Carry.Enable): a player with a torch in their bags doesn't have to light
- * it. It is in their hand whenever the hand is free, and has no timer. The client tells the
+ * Carrying (ForeverTorch.Carry.Enable): from dusk to dawn a player with a torch in their bags
+ * doesn't have to light it. It is in their hand whenever the hand is free, and has no timer. The client tells the
  * server when weapons are drawn or put back (the sheath state), so a few times a second the
  * player hook below puts the torch away while weapons are drawn, in combat, in water, in a
  * capital city or in an animal form, and brings it back out afterwards. Right-clicking the buff
@@ -62,7 +62,7 @@ namespace
         bool inCities = false;
         bool inCombat = false;
         bool carry = true;
-        bool carryNightOnly = false;
+        bool carryNightOnly = true;
         uint32 nightStart = 19;
         uint32 nightEnd = 6;
     };
@@ -303,7 +303,7 @@ public:
         config.inCities = sConfigMgr->GetOption<bool>("ForeverTorch.AllowInCities", false);
         config.inCombat = sConfigMgr->GetOption<bool>("ForeverTorch.AllowInCombat", false);
         config.carry = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.Enable", true);
-        config.carryNightOnly = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.NightOnly", false);
+        config.carryNightOnly = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.NightOnly", true);
         config.nightStart = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightStart", 19) % 24;
         config.nightEnd = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightEnd", 6) % 24;
 
