@@ -12,6 +12,13 @@
  *
  * The same three things stop it being lit, in the spell script's cast check.
  *
+ * Carrying (ForeverTorch.Carry.Enable): a player with a torch in their bags doesn't have to light
+ * it. It is in their hand whenever the hand is free, and has no timer. The client tells the
+ * server when weapons are drawn or put back (the sheath state), so a few times a second the
+ * player hook below puts the torch away while weapons are drawn, in combat, in water, in a
+ * capital city or in an animal form, and brings it back out afterwards. Right-clicking the buff
+ * puts it away for good, kept as a character setting; using the item takes it out again.
+ *
  * The torch comes from a fallen Night Watch Guard in Duskwood (creature 9503100, quest 9503100).
  * The quest can be done once. A player who has done it and no longer has a torch, in bags or
  * bank, can take another from the body: that is the gossip option below.
@@ -26,8 +33,11 @@
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "ScriptedGossip.h"
+#include "SpellAuraEffects.h"
+#include "SpellAuras.h"
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
+#include "Timer.h"
 
 namespace
 {
@@ -37,19 +47,113 @@ namespace
     constexpr uint32 NPC_TEXT_FALLEN_WATCHMAN = 9503100;
     constexpr uint32 GOSSIP_ACTION_TAKE_TORCH = GOSSIP_ACTION_INFO_DEF + 1;
 
+    // How often a player's carried torch is looked at, in milliseconds. This is the longest a
+    // torch and a drawn weapon share a hand.
+    constexpr uint32 CARRY_UPDATE_INTERVAL = 250;
+
+    // Character setting (character_settings, kept only with EnablePlayerSettings = 1 in
+    // worldserver.conf; without it the choice lasts until logout).
+    const std::string SETTING_SOURCE = "mod-forever-torch";
+    constexpr uint32 SETTING_PUT_AWAY = 0;
+
     struct Config
     {
         bool enabled = true;
         bool inCities = false;
         bool inCombat = false;
+        bool carry = true;
+        bool carryNightOnly = false;
+        uint32 nightStart = 19;
+        uint32 nightEnd = 6;
     };
 
     Config config;
+
+    struct CarryState : public DataMap::Base
+    {
+        uint32 timer = 0;
+    };
+
+    CarryState* GetCarryState(Player* player)
+    {
+        return player->CustomData.GetDefault<CarryState>("mod-forever-torch");
+    }
 
     bool IsCapitalCity(uint32 zoneId)
     {
         AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId);
         return zone && (zone->flags & AREA_FLAG_CAPITAL);
+    }
+
+    // Server time is the time on the client's clock.
+    bool IsCarryHour()
+    {
+        if (!config.carryNightOnly)
+            return true;
+
+        uint32 hour = Acore::Time::GetHours();
+        if (config.nightStart <= config.nightEnd)
+            return hour >= config.nightStart && hour < config.nightEnd;
+
+        return hour >= config.nightStart || hour < config.nightEnd;
+    }
+
+    // A hand to hold the torch in, and nothing that puts a torch out.
+    bool HasHandFree(Player* player)
+    {
+        return player->IsAlive()
+            && player->GetSheath() == SHEATH_STATE_UNARMED
+            && (config.inCombat || !player->IsInCombat())
+            && !player->IsInWater()
+            && (config.inCities || !IsCapitalCity(player->GetZoneId()))
+            && !player->IsInDisallowedMountForm()
+            && !player->HasStealthAura()
+            && !player->GetVehicle();
+    }
+
+    // Brings the carried torch out or puts it away. A carried torch is the same aura as a lit
+    // one, without the five minutes; that is also how the two are told apart.
+    void UpdateCarriedTorch(Player* player)
+    {
+        Aura* torch = player->GetAura(SPELL_NIGHT_WATCHMANS_TORCH);
+
+        if (!config.enabled || !config.carry || !IsCarryHour())
+        {
+            // carrying was switched off, or the night is over
+            if (torch && torch->IsPermanent())
+                player->RemoveAura(torch);
+            return;
+        }
+
+        bool handFree = HasHandFree(player);
+        if (!handFree && !torch)
+            return;
+
+        // the bags are searched last, and the setting is only read for players with a torch:
+        // reading it gives the character a row in character_settings
+        if (!player->HasItemCount(ITEM_NIGHT_WATCHMANS_TORCH, 1, false)
+            || player->GetPlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY).value)
+        {
+            // banked or destroyed while it was out. A torch lit without owning one burns on.
+            if (torch && torch->IsPermanent())
+                player->RemoveAura(torch);
+            return;
+        }
+
+        if (!handFree)
+        {
+            player->RemoveAura(torch);
+            return;
+        }
+
+        if (!torch)
+            torch = player->AddAura(SPELL_NIGHT_WATCHMANS_TORCH, player);
+
+        if (torch && !torch->IsPermanent())
+        {
+            torch->SetMaxDuration(-1);
+            torch->SetDuration(-1);
+        }
     }
 
     // Has done the quest and has no torch left anywhere.
@@ -84,9 +188,43 @@ class spell_forever_torch : public SpellScript
         return SPELL_CAST_OK;
     }
 
+    // Lighting it takes back an earlier "put away", and the carry update runs on the next tick
+    // instead of up to a quarter of a second later.
+    void HandleAfterCast()
+    {
+        Player* player = GetCaster()->ToPlayer();
+        if (!player || !config.carry)
+            return;
+
+        player->UpdatePlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY, 0);
+        GetCarryState(player)->timer = CARRY_UPDATE_INTERVAL;
+    }
+
     void Register() override
     {
         OnCheckCast += SpellCheckCastFn(spell_forever_torch::CheckCast);
+        AfterCast += SpellCastFn(spell_forever_torch::HandleAfterCast);
+    }
+};
+
+class spell_forever_torch_aura : public AuraScript
+{
+    PrepareAuraScript(spell_forever_torch_aura);
+
+    // Only the player's own right-click on the buff. Everything that puts the torch away for a
+    // while (weapons, combat, water, cities) removes the aura in the default mode.
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (!config.carry || GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_CANCEL)
+            return;
+
+        if (Player* player = GetTarget()->ToPlayer())
+            player->UpdatePlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY, 1);
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_forever_torch_aura::HandleRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -94,7 +232,7 @@ class ForeverTorchPlayerScript : public PlayerScript
 {
 public:
     ForeverTorchPlayerScript() : PlayerScript("ForeverTorchPlayerScript",
-        { PLAYERHOOK_ON_PLAYER_ENTER_COMBAT, PLAYERHOOK_ON_UPDATE_ZONE }) { }
+        { PLAYERHOOK_ON_PLAYER_ENTER_COMBAT, PLAYERHOOK_ON_UPDATE_ZONE, PLAYERHOOK_ON_UPDATE }) { }
 
     void OnPlayerEnterCombat(Player* player, Unit* /*enemy*/) override
     {
@@ -106,6 +244,17 @@ public:
     {
         if (!config.inCities && IsCapitalCity(newZone))
             player->RemoveAurasDueToSpell(SPELL_NIGHT_WATCHMANS_TORCH);
+    }
+
+    void OnPlayerUpdate(Player* player, uint32 diff) override
+    {
+        CarryState* state = GetCarryState(player);
+        state->timer += diff;
+        if (state->timer < CARRY_UPDATE_INTERVAL)
+            return;
+
+        state->timer = 0;
+        UpdateCarriedTorch(player);
     }
 };
 
@@ -153,16 +302,21 @@ public:
         config.enabled = sConfigMgr->GetOption<bool>("ForeverTorch.Enable", true);
         config.inCities = sConfigMgr->GetOption<bool>("ForeverTorch.AllowInCities", false);
         config.inCombat = sConfigMgr->GetOption<bool>("ForeverTorch.AllowInCombat", false);
+        config.carry = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.Enable", true);
+        config.carryNightOnly = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.NightOnly", false);
+        config.nightStart = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightStart", 19) % 24;
+        config.nightEnd = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightEnd", 6) % 24;
 
-        LOG_INFO("server.loading", "mod-forever-torch: {}, in capital cities: {}, in combat: {}",
+        LOG_INFO("server.loading", "mod-forever-torch: {}, in capital cities: {}, in combat: {}, carried with weapons sheathed: {}",
             config.enabled ? "enabled" : "disabled", config.inCities ? "stays lit" : "goes out",
-            config.inCombat ? "stays lit" : "goes out");
+            config.inCombat ? "stays lit" : "goes out",
+            !config.carry ? "no" : config.carryNightOnly ? "at night" : "yes");
     }
 };
 
 void AddForeverTorchScripts()
 {
-    RegisterSpellScript(spell_forever_torch);
+    RegisterSpellAndAuraScriptPair(spell_forever_torch, spell_forever_torch_aura);
     new ForeverTorchPlayerScript();
     new npc_forever_torch_watchman();
     new ForeverTorchWorldScript();
