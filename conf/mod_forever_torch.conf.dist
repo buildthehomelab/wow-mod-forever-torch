@@ -34,3 +34,41 @@ ForeverTorch.AllowInCities = 0
 #
 
 ForeverTorch.AllowInCombat = 0
+
+#
+#    ForeverTorch.Carry.Enable
+#        Description: From dusk to dawn (see ForeverTorch.Carry.NightOnly) a player with a
+#                     torch in their bags carries it without lighting it: it is in their hand,
+#                     with no timer, whenever their weapons are sheathed. It is
+#                     put away while weapons are drawn (melee or ranged), in combat, in water,
+#                     in a capital city, in an animal form, in stealth and in a vehicle, and
+#                     comes back out afterwards. Right-clicking the buff puts it away until the
+#                     item is used again. A torch left in the bank is not carried.
+#                     With 0 the torch is only ever lit by using it, for five minutes.
+#        Default:     1
+#
+
+ForeverTorch.Carry.Enable = 1
+
+#
+#    ForeverTorch.Carry.NightOnly
+#        Description: Carry the torch only between NightStart and NightEnd. Outside those hours
+#                     it can still be lit by using it, for five minutes.
+#        Default:     1 - (Carried from dusk to dawn)
+#                     0 - (Carried at any hour)
+#
+
+ForeverTorch.Carry.NightOnly = 1
+
+#
+#    ForeverTorch.Carry.NightStart
+#    ForeverTorch.Carry.NightEnd
+#        Description: The hours (0-23, server time) the night starts and ends for
+#                     ForeverTorch.Carry.NightOnly. The night includes the start hour and not
+#                     the end hour. The defaults run from the start of dusk to the end of dawn
+#                     on our realm's dark nights client patch.
+#        Default:     19 and 6 - (19:00 to 05:59)
+#
+
+ForeverTorch.Carry.NightStart = 19
+ForeverTorch.Carry.NightEnd = 6
