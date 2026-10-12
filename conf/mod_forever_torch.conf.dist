@@ -8,10 +8,11 @@
 
 #
 #    ForeverTorch.Enable
-#        Description: Master switch. With 0 the torch can't be lit and the fallen watchman hands
-#                     out no spare torches. A torch that is already burning burns out by itself.
-#                     The watchman, his quest and the item are rows in the world database and
-#                     stay: remove those with the module's uninstall SQL.
+#        Description: Master switch. With 0 the torch can't be lit, nobody carries one and the
+#                     fallen watchman hands out no spare torches. A torch that is already
+#                     burning burns out by itself. The watchman, his quest, the item and the
+#                     vendors' rows for it are in the world database and stay: remove those
+#                     with the module's uninstall SQL.
 #        Default:     1
 #
 
@@ -37,23 +38,34 @@ ForeverTorch.AllowInCombat = 0
 
 #
 #    ForeverTorch.Carry.Enable
-#        Description: From dusk to dawn (see ForeverTorch.Carry.NightOnly) a player with a
-#                     torch in their bags carries it without lighting it: it is in their hand,
-#                     with no timer, whenever their weapons are sheathed. It is
-#                     put away while weapons are drawn (melee or ranged), in combat, in water,
-#                     in a capital city, in an animal form, in stealth and in a vehicle, and
-#                     comes back out afterwards. Right-clicking the buff puts it away until the
-#                     item is used again. A torch left in the bank is not carried.
-#                     With 0 the torch is only ever lit by using it, for five minutes.
+#        Description: From dusk to dawn (see ForeverTorch.Carry.NightOnly) every player
+#                     carries a torch without lighting one: it is in their hand, with no timer,
+#                     whenever their weapons are sheathed. It is put away while weapons are
+#                     drawn (melee or ranged), in combat, in water, in a capital city, in an
+#                     animal form, in stealth and in a vehicle, and comes back out afterwards.
+#                     Right-clicking the buff puts it away until the player types ".torch on"
+#                     or uses the item. Bots carry none.
+#                     With 0 the torch is only ever lit by using the item, for five minutes,
+#                     and the .torch command does nothing.
 #        Default:     1
 #
 
 ForeverTorch.Carry.Enable = 1
 
 #
+#    ForeverTorch.Carry.RequireItem
+#        Description: Who carries a torch.
+#        Default:     0 - (Everyone. The item is only for lighting a torch by hand)
+#                     1 - (Only players with a Night Watchman's Torch in their bags. One in
+#                          the bank doesn't count)
+#
+
+ForeverTorch.Carry.RequireItem = 0
+
+#
 #    ForeverTorch.Carry.NightOnly
 #        Description: Carry the torch only between NightStart and NightEnd. Outside those hours
-#                     it can still be lit by using it, for five minutes.
+#                     it can still be lit by using the item, for five minutes.
 #        Default:     1 - (Carried from dusk to dawn)
 #                     0 - (Carried at any hour)
 #

@@ -24,6 +24,7 @@ DELETE FROM `creature_equip_template` WHERE `CreatureID` = 9503100;
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 9503100;
 DELETE FROM `creature_template` WHERE `entry` = 9503100;
 
+DELETE FROM `npc_vendor` WHERE `item` = 90400;
 DELETE FROM `spell_script_names` WHERE `spell_id` = 90400;
 DELETE FROM `spell_dbc` WHERE `ID` = 90400;
 DELETE FROM `item_template` WHERE `entry` = 90400;

@@ -4,6 +4,7 @@
 --                   cooldown). Using it casts spell 90400, a five minute aura that shows a lit
 --                   torch in your left hand. The spell's own row is in
 --                   mod_forever_torch_spell.sql, written by tools/build_patch.py.
+--   npc_vendor      General goods vendors sell the torch for 25 copper.
 --   creature 9503100  Night Watch Guard, dead, lying on the ground. Friendly to both factions.
 --   quest 9503100   A Light on the Road: take his torch. No objectives, so it is complete as
 --                   soon as it is accepted; he gives it and ends it.
@@ -20,7 +21,8 @@
 --
 -- This module's ids: item and spell 90400 (reserved to 90409); creature, quest, npc_text, pool
 -- and creature spawn guids 9503100 (reserved to 9503199). No stock rows are changed, game event
--- 25 included. Idempotent. Undo with data/sql/uninstall/mod_forever_torch_uninstall_world.sql.
+-- 25 included; the vendors get one new npc_vendor row each. Idempotent. Undo with
+-- data/sql/uninstall/mod_forever_torch_uninstall_world.sql.
 
 -- ---------------------------------------------------------------------------------------------
 -- The torch
@@ -28,13 +30,30 @@
 
 -- Miscellaneous, bind on pickup, unique. Flags 64: its spell is cast by the player. Display
 -- 12312 is the Dim Torch's (the lit torch icon). The 30 seconds are the item's own cooldown.
+-- 25 copper at a vendor, what a new character has after a quest or two; vendors buy it back
+-- for nothing.
 DELETE FROM `item_template` WHERE `entry` = 90400;
 INSERT INTO `item_template` (`entry`, `class`, `subclass`, `name`, `displayid`, `Quality`, `Flags`, `BuyPrice`, `SellPrice`, `ItemLevel`, `maxcount`, `stackable`, `delay`, `spellid_1`, `spelltrigger_1`, `spellcharges_1`, `spellcooldown_1`, `spellcategory_1`, `spellcategorycooldown_1`, `bonding`, `description`, `Material`) VALUES
-(90400, 15, 4, 'Night Watchman''s Torch', 12312, 2, 64, 0, 0, 1, 1, 1, 0, 90400, 0, 0, 30000, 0, -1, 1, 'The Night Watch dips its torches in pitch thick enough to last until morning.', -1);
+(90400, 15, 4, 'Night Watchman''s Torch', 12312, 2, 64, 25, 0, 1, 1, 1, 0, 90400, 0, 0, 30000, 0, -1, 1, 'The Night Watch dips its torches in pitch thick enough to last until morning.', -1);
 
 DELETE FROM `spell_script_names` WHERE `spell_id` = 90400;
 INSERT INTO `spell_script_names` (`spell_id`, `ScriptName`) VALUES
 (90400, 'spell_forever_torch');
+
+-- ---------------------------------------------------------------------------------------------
+-- Vendors
+-- ---------------------------------------------------------------------------------------------
+
+-- Every vendor whose title is general goods or supplies: "General Goods", "General Supplies",
+-- "General Goods & Repairs", "General & Trade Supplies", "General Provisioner" and the like,
+-- about 140 on stock AzerothCore, in every town of both factions. "Trade Supplies" alone is not
+-- one of them. Slot 999 puts the torch at the end of each list. A vendor added to the world
+-- later needs a row of its own.
+DELETE FROM `npc_vendor` WHERE `item` = 90400;
+INSERT INTO `npc_vendor` (`entry`, `slot`, `item`, `maxcount`, `incrtime`, `ExtendedCost`, `VerifiedBuild`)
+SELECT `entry`, 999, 90400, 0, 0, 0, 0
+FROM `creature_template`
+WHERE (`npcflag` & 128) AND (`subname` LIKE 'General %' OR `subname` LIKE '%General Goods%');
 
 -- ---------------------------------------------------------------------------------------------
 -- The fallen watchman
