@@ -1,8 +1,9 @@
 # Forever Torch
 
-An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module that adds the **Night
-Watchman's Torch**: a torch players carry in their off hand that lights the ground around them.
-It follows the torch of the same name in World of Warcraft: Forever.
+An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module that puts a torch in every
+player's off hand at night, one that lights the ground around them, and adds the **Night
+Watchman's Torch**, an item that lights the same torch at any hour. It follows the torch of the
+same name in World of Warcraft: Forever.
 
 On a stock client the nights are bright enough that nobody needs one. It is made for a realm
 whose client has dark nights; see [Dark nights](#dark-nights).
@@ -11,9 +12,9 @@ whose client has dark nights; see [Dark nights](#dark-nights).
 
 | | |
 | --- | --- |
+| Carried | From dusk to dawn (19:00 to 06:00 server time) it is in your hand whenever your weapons are sheathed. No timer, and nothing to buy or find |
 | Item | Night Watchman's Torch: bind on pickup, unique, not used up |
-| Carried | From dusk to dawn (19:00 to 06:00 server time), with the torch in your bags, it is in your hand whenever your weapons are sheathed. No timer |
-| Use | By day: lights the torch for 5 minutes. At night: takes it out again after you put it away. 30 second cooldown |
+| Use | By day, or in a cave: lights the torch for 5 minutes. At night: takes it out again after you put it away. 30 second cooldown |
 | Light | Warm orange, strongest at your feet, gone at 22 yards. Everyone nearby sees it |
 | Hand | Left. A weapon in the right hand stays visible |
 | Put away | While your weapons are drawn (melee or ranged), in combat, while swimming, in a capital city, in an animal form, in stealth, in a vehicle. It comes back out by itself |
@@ -24,17 +25,24 @@ and again to swap back. After a fight the torch returns when your character shea
 At dawn the carried torch is put away, and it comes out again at dusk.
 
 Right-click the buff to put the torch away for good. It stays away, through logging out, until
-you use the item. A torch in the bank is not carried either.
+you type `.torch on` or use the item. `.torch off` puts it away as well, and `.torch` alone
+switches between the two.
 
-Carrying is a setting, and so are its hours and the combat and city rules. By day, or with
-carrying off, using the torch lights it for 5 minutes, and it goes out for good when you enter
-combat, start swimming or enter a capital city.
+Carrying is a setting, and so are its hours, the combat and city rules, and whether it takes the
+item (`ForeverTorch.Carry.RequireItem`). By day, or with carrying off, using the item lights the
+torch for 5 minutes, and it goes out for good when you enter combat, start swimming or enter a
+capital city.
 
-## Where it comes from
+Bots carry no torch.
 
-A **Night Watch Guard** lies dead in Duskwood with his torch still burning. He has a quest, **A
-Light on the Road**, with nothing to do but accept it and hand it in: take his torch. Both
-factions can.
+## Where the item comes from
+
+**General goods vendors** sell the Night Watchman's Torch for 25 copper: every vendor titled
+General Goods, General Supplies or similar, about 140 across both factions.
+
+There is also one to be had for free. A **Night Watch Guard** lies dead in Duskwood with his torch
+still burning. He has a quest, **A Light on the Road**, with nothing to do but accept it and hand
+it in: take his torch. Both factions can.
 
 - He is only there **at night**, from 21:00 to 06:00 server time.
 - He is in **one of five places**, picked again every night: behind the inn in the abandoned town
@@ -47,8 +55,8 @@ factions can.
 
 - AzerothCore 3.3.5a.
 - **A client patch.** The torch is a new spell, a new item and a model, and a 3.3.5a client only
-  knows the ones in its own files. Without the patch the item shows a question mark, and using it
-  does nothing a player can see.
+  knows the ones in its own files. Without the patch the item shows a question mark, and neither
+  using it nor carrying a torch at night shows anything a player can see.
 
 ## Install
 
@@ -89,18 +97,20 @@ Give players the new patch in place of the old one. Needs Python 3 and
 
 | Setting | Default | |
 | --- | --- | --- |
-| `ForeverTorch.Enable` | `1` | With `0` the torch can't be lit and the watchman hands out no spares |
+| `ForeverTorch.Enable` | `1` | With `0` the torch can't be lit, nobody carries one and the watchman hands out no spares |
 | `ForeverTorch.AllowInCities` | `0` | With `1` it can be lit and stays lit in capital cities |
 | `ForeverTorch.AllowInCombat` | `0` | With `1` it can be lit and stays lit in combat. A carried torch is still put away while weapons are drawn |
-| `ForeverTorch.Carry.Enable` | `1` | Carry the torch whenever weapons are sheathed. With `0` it is only lit by using it |
+| `ForeverTorch.Carry.Enable` | `1` | Carry a torch whenever weapons are sheathed. With `0` it is only lit by using the item |
+| `ForeverTorch.Carry.RequireItem` | `0` | With `1` only players with the item in their bags carry a torch (one in the bank doesn't count). With `0` everyone does |
 | `ForeverTorch.Carry.NightOnly` | `1` | Only carry it at night. With `0` it is carried at any hour |
 | `ForeverTorch.Carry.NightStart` / `NightEnd` | `19` / `6` | The night for `NightOnly`, in hours of server time |
 
 All of them reload with `.reload config`.
 
 Whether a character has put the torch away is a character setting (source `mod-forever-torch`
-in `character_settings`). AzerothCore only saves those with `EnablePlayerSettings = 1` in
-`worldserver.conf`; without it the torch comes back out at the next login.
+in `character_settings`, one row for each character that has been online at night).
+AzerothCore only saves those with `EnablePlayerSettings = 1` in `worldserver.conf`; without it
+the torch comes back out at the next login.
 
 ## Dark nights
 
@@ -117,6 +127,8 @@ edge of the light is soft on open ground and can look blocky on paving.
 
 - Item 90400, Night Watchman's Torch, and its spell 90400 (`spell_dbc`) with a
   `spell_script_names` row.
+- One `npc_vendor` row for the item on every general goods vendor, picked by title when the SQL
+  runs. A vendor you add later needs its own row.
 - Creature 9503100, Night Watch Guard, with its model, gear and five spawns (guids 9503100 to
   9503104) in a pool (9503100) that shows one of them. The pool belongs to game event 25, which
   runs every night from 21:00 to 06:00. Stock AzerothCore calls that event "Pyrewood Village";
@@ -149,11 +161,13 @@ On the characters database, ``DELETE FROM `character_settings` WHERE `source` =
   from the client's terrain data and have not all been checked in game.
 - **"You can't do that here":** you're in a capital city.
 - **The torch isn't in my hand:** it is daytime (it is carried from 19:00 to 06:00 server time),
-  your weapons are drawn (press Z), the torch is in the bank, or you put it away by
-  right-clicking the buff: use the item. In a capital city, in water and in animal forms it
-  stays away.
-- **The torch has a 5 minute timer:** it is daytime, you don't have a torch in your bags, or
-  carrying is off.
+  your weapons are drawn (press Z), or you put it away by right-clicking the buff: type
+  `.torch on`. In a capital city, in water and in animal forms it stays away. With
+  `ForeverTorch.Carry.RequireItem = 1` the item also has to be in your bags, not the bank.
+- **The torch has a 5 minute timer:** it is daytime, or carrying is off.
+- **A general goods vendor doesn't sell the torch:** the rows are added once, by title, when the
+  module's SQL first runs. A vendor added or retitled since needs an `npc_vendor` row for item
+  90400.
 - **The torch never goes out in combat or in cities:** the module isn't built in, or
   `ForeverTorch.AllowInCombat` / `AllowInCities` is `1`. Look for the `mod-forever-torch:` line
   in the worldserver log.
@@ -163,16 +177,18 @@ On the characters database, ``DELETE FROM `character_settings` WHERE `source` =
 
 Category: World
 
-- Added the **Night Watchman's Torch**. From dusk to dawn, with it in your bags, you carry a lit
-  torch in your off hand whenever your weapons are sheathed. By day, use it to light it for 5
-  minutes. The torch lights the ground around you and can be seen by other players.
+- From dusk to dawn every character now carries a lit torch in the off hand whenever weapons are
+  sheathed. There is nothing to buy or find. The torch lights the ground around you and can be
+  seen by other players.
 - The torch is put away when you draw your weapons, enter combat, start swimming or enter a
-  capital city, and comes back out afterwards. Right-click the buff to put it away for good; use
-  the torch to take it out again.
-- A fallen **Night Watch Guard** can be found somewhere in Duskwood at night. Take his torch by
-  completing **A Light on the Road**. Players who lose their torch can return to him for another.
+  capital city, and comes back out afterwards. Right-click the buff, or type `.torch off`, to put
+  it away for good; `.torch on` takes it out again.
+- Added the **Night Watchman's Torch**, an item that lights the same torch for 5 minutes at any
+  hour, for caves and dark places by day. General goods vendors sell it for 25 copper.
+- A fallen **Night Watch Guard** can be found somewhere in Duskwood at night. Take his torch for
+  free by completing **A Light on the Road**. Players who lose it can return to him for another.
 
-> The nights are getting darker. This is the first thing we wanted you to have in your bags
+> The nights are getting darker. This is the first thing we wanted you to have in your hand
 > before they do.
 
 ## Credits

@@ -12,20 +12,27 @@
  *
  * The same three things stop it being lit, in the spell script's cast check.
  *
- * Carrying (ForeverTorch.Carry.Enable): from dusk to dawn a player with a torch in their bags
- * doesn't have to light it. It is in their hand whenever the hand is free, and has no timer. The client tells the
- * server when weapons are drawn or put back (the sheath state), so a few times a second the
- * player hook below puts the torch away while weapons are drawn, in combat, in water, in a
- * capital city or in an animal form, and brings it back out afterwards. Right-clicking the buff
- * puts it away for good, kept as a character setting; using the item takes it out again.
+ * Carrying (ForeverTorch.Carry.Enable): from dusk to dawn nobody has to light a torch, or own
+ * one. It is in every player's hand whenever the hand is free, and has no timer. The client
+ * tells the server when weapons are drawn or put back (the sheath state), so a few times a
+ * second the player hook below puts the torch away while weapons are drawn, in combat, in water,
+ * in a capital city or in an animal form, and brings it back out afterwards. Right-clicking the
+ * buff puts it away for good, kept as a character setting; ".torch on" or using the item takes
+ * it out again. With ForeverTorch.Carry.RequireItem only players with the item in their bags
+ * carry one. Bots carry none.
  *
- * The torch comes from a fallen Night Watch Guard in Duskwood (creature 9503100, quest 9503100).
- * The quest can be done once. A player who has done it and no longer has a torch, in bags or
- * bank, can take another from the body: that is the gossip option below.
+ * The item is for lighting a torch by hand, by day or in a cave. General goods vendors sell it
+ * (rows in the module's SQL), and a fallen Night Watch Guard in Duskwood has one for free
+ * (creature 9503100, quest 9503100). The quest can be done once. A player who has done it and
+ * no longer has a torch, in bags or bank, can take another from the body: that is the gossip
+ * option below.
  *
  * Released under the MIT License.
  */
 
+#include "Chat.h"
+#include "ChatCommand.h"
+#include "CommandScript.h"
 #include "Config.h"
 #include "Creature.h"
 #include "DBCStores.h"
@@ -38,6 +45,9 @@
 #include "SpellScript.h"
 #include "SpellScriptLoader.h"
 #include "Timer.h"
+#include "WorldSession.h"
+
+using namespace Acore::ChatCommands;
 
 namespace
 {
@@ -63,6 +73,7 @@ namespace
         bool inCombat = false;
         bool carry = true;
         bool carryNightOnly = true;
+        bool carryRequireItem = false;
         uint32 nightStart = 19;
         uint32 nightEnd = 6;
     };
@@ -77,6 +88,36 @@ namespace
     CarryState* GetCarryState(Player* player)
     {
         return player->CustomData.GetDefault<CarryState>("mod-forever-torch");
+    }
+
+    // Bot sessions: IsHeadless() on current playerbots cores, IsBot() on older ones.
+    template <typename Session, typename = void>
+    struct HasIsHeadless : std::false_type { };
+
+    template <typename Session>
+    struct HasIsHeadless<Session, std::void_t<decltype(std::declval<Session&>().IsHeadless())>> : std::true_type { };
+
+    template <typename Session, typename = void>
+    struct HasIsBot : std::false_type { };
+
+    template <typename Session>
+    struct HasIsBot<Session, std::void_t<decltype(std::declval<Session&>().IsBot())>> : std::true_type { };
+
+    template <typename Session>
+    bool IsBotSession(Session* session)
+    {
+        if constexpr (HasIsHeadless<Session>::value)
+            return session->IsHeadless();
+        else if constexpr (HasIsBot<Session>::value)
+            return session->IsBot();
+        else
+            return false;
+    }
+
+    bool IsRealPlayer(Player* player)
+    {
+        WorldSession* session = player->GetSession();
+        return session && !IsBotSession(session);
     }
 
     bool IsCapitalCity(uint32 zoneId)
@@ -129,12 +170,12 @@ namespace
         if (!handFree && !torch)
             return;
 
-        // the bags are searched last, and the setting is only read for players with a torch:
-        // reading it gives the character a row in character_settings
-        if (!player->HasItemCount(ITEM_NIGHT_WATCHMANS_TORCH, 1, false)
+        // the bags are searched last. Reading the setting gives the character a row in
+        // character_settings.
+        if ((config.carryRequireItem && !player->HasItemCount(ITEM_NIGHT_WATCHMANS_TORCH, 1, false))
             || player->GetPlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY).value)
         {
-            // banked or destroyed while it was out. A torch lit without owning one burns on.
+            // banked or destroyed while it was out. A torch lit by hand burns on.
             if (torch && torch->IsPermanent())
                 player->RemoveAura(torch);
             return;
@@ -218,8 +259,13 @@ class spell_forever_torch_aura : public AuraScript
         if (!config.carry || GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_CANCEL)
             return;
 
-        if (Player* player = GetTarget()->ToPlayer())
-            player->UpdatePlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY, 1);
+        // only a carried torch: one lit by hand has its five minutes and is simply put out
+        Player* player = GetTarget()->ToPlayer();
+        if (!player || !GetAura()->IsPermanent())
+            return;
+
+        player->UpdatePlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY, 1);
+        ChatHandler(player->GetSession()).SendSysMessage("You put your torch away. Type .torch on to carry it again.");
     }
 
     void Register() override
@@ -248,6 +294,9 @@ public:
 
     void OnPlayerUpdate(Player* player, uint32 diff) override
     {
+        if (!IsRealPlayer(player))
+            return;
+
         CarryState* state = GetCarryState(player);
         state->timer += diff;
         if (state->timer < CARRY_UPDATE_INTERVAL)
@@ -292,6 +341,49 @@ public:
     }
 };
 
+class ForeverTorchCommandScript : public CommandScript
+{
+public:
+    ForeverTorchCommandScript() : CommandScript("ForeverTorchCommandScript") { }
+
+    ChatCommandTable GetCommands() const override
+    {
+        static ChatCommandTable commandTable =
+        {
+            { "torch", HandleTorchCommand, SEC_PLAYER, Console::No },
+        };
+
+        return commandTable;
+    }
+
+    // .torch, .torch on, .torch off: the same choice as right-clicking the buff and using the
+    // item. Without a word it switches.
+    static bool HandleTorchCommand(ChatHandler* handler, Optional<bool> carry)
+    {
+        Player* player = handler->GetPlayer();
+        if (!config.enabled || !config.carry)
+        {
+            handler->SendSysMessage("Torches are not carried on this server.");
+            return true;
+        }
+
+        bool putAway = carry ? !*carry : !player->GetPlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY).value;
+        player->UpdatePlayerSetting(SETTING_SOURCE, SETTING_PUT_AWAY, putAway ? 1 : 0);
+        GetCarryState(player)->timer = CARRY_UPDATE_INTERVAL;
+
+        if (putAway)
+            handler->SendSysMessage("You put your torch away. Type .torch on to carry it again.");
+        else if (config.carryRequireItem && !player->HasItemCount(ITEM_NIGHT_WATCHMANS_TORCH, 1, false))
+            handler->SendSysMessage("You have no torch in your bags. General goods vendors sell them.");
+        else if (config.carryNightOnly)
+            handler->SendSysMessage("You will carry a torch from dusk to dawn, whenever your weapons are sheathed.");
+        else
+            handler->SendSysMessage("You will carry a torch whenever your weapons are sheathed.");
+
+        return true;
+    }
+};
+
 class ForeverTorchWorldScript : public WorldScript
 {
 public:
@@ -304,13 +396,15 @@ public:
         config.inCombat = sConfigMgr->GetOption<bool>("ForeverTorch.AllowInCombat", false);
         config.carry = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.Enable", true);
         config.carryNightOnly = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.NightOnly", true);
+        config.carryRequireItem = sConfigMgr->GetOption<bool>("ForeverTorch.Carry.RequireItem", false);
         config.nightStart = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightStart", 19) % 24;
         config.nightEnd = sConfigMgr->GetOption<uint32>("ForeverTorch.Carry.NightEnd", 6) % 24;
 
-        LOG_INFO("server.loading", "mod-forever-torch: {}, in capital cities: {}, in combat: {}, carried with weapons sheathed: {}",
+        LOG_INFO("server.loading", "mod-forever-torch: {}, in capital cities: {}, in combat: {}, carried with weapons sheathed: {}{}",
             config.enabled ? "enabled" : "disabled", config.inCities ? "stays lit" : "goes out",
             config.inCombat ? "stays lit" : "goes out",
-            !config.carry ? "no" : config.carryNightOnly ? "at night" : "yes");
+            !config.carry ? "no" : config.carryNightOnly ? "at night" : "yes",
+            !config.carry ? "" : config.carryRequireItem ? " (with the item)" : " (everyone)");
     }
 };
 
@@ -319,5 +413,6 @@ void AddForeverTorchScripts()
     RegisterSpellAndAuraScriptPair(spell_forever_torch, spell_forever_torch_aura);
     new ForeverTorchPlayerScript();
     new npc_forever_torch_watchman();
+    new ForeverTorchCommandScript();
     new ForeverTorchWorldScript();
 }
