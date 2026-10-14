@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The client side of the Night Watchman's Torch: its rows and its model for the realm's spell
+"""The client side of the Night Watchman's Torch: its rows and its model for your realm's spell
 patch, and the spell's row for the server.
 
     python3 build_patch.py --patch-w patch-W.MPQ --client /path/to/client --out patch-W-new.MPQ \\
         --sql ../data/sql/db-world/mod_forever_torch_spell.sql
 
---patch-w is the patch that carries the realm's Spell.dbc, Item.dbc and the SpellVisual tables
-(ours is patch-W.MPQ). A patch MPQ replaces whole files, so the new rows go into its copies; every
+--patch-w is the patch that carries your realm's Spell.dbc, Item.dbc and the SpellVisual tables
+(patch-W.MPQ above is an example name). A patch MPQ replaces whole files, so the new rows go into its copies; every
 other file in it is copied unchanged. It gains:
 
 - Spell.dbc 90400, Night Watchman's Torch: a five minute aura on yourself that does nothing but
@@ -360,7 +360,7 @@ def write_sql(path, spell):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--patch-w", required=True, help="the realm's live spell patch (patch-W.MPQ)")
+    ap.add_argument("--patch-w", required=True, help="your realm's live spell patch (e.g. patch-W.MPQ)")
     ap.add_argument("--client", required=True, help="the base client folder (has Data/)")
     ap.add_argument("--out", required=True, help="the new spell patch")
     ap.add_argument("--sql", help="write the spell's server row here")
