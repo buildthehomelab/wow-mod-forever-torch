@@ -77,8 +77,8 @@ ForeverTorch.Carry.NightOnly = 1
 #    ForeverTorch.Carry.NightEnd
 #        Description: The hours (0-23, server time) the night starts and ends for
 #                     ForeverTorch.Carry.NightOnly. The night includes the start hour and not
-#                     the end hour. The defaults run from the start of dusk to the end of dawn
-#                     on our realm's dark nights client patch.
+#                     the end hour. The defaults run from the start of dusk to the end of
+#                     dawn; change them to fit how dark your client's nights are.
 #        Default:     19 and 6 - (19:00 to 05:59)
 #
 

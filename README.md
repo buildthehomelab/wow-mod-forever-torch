@@ -72,7 +72,8 @@ start.
 
 ### The client patch
 
-`tools/build_patch.py` adds the torch to the patch MPQ that carries your realm's `Spell.dbc`:
+`tools/build_patch.py` adds the torch to the patch MPQ that carries your realm's `Spell.dbc`
+(`patch-W.MPQ` below is an example name):
 
 ```bash
 python3 tools/build_patch.py --patch-w patch-W.MPQ --client /path/to/client --out patch-W-new.MPQ \
@@ -117,8 +118,7 @@ the torch comes back out at the next login.
 The torch's light is a point light on its model, which a 3.3.5a client draws on the ground,
 buildings and characters around it. How much that shows depends on how dark the client's night
 is. This module does not change the night, and it does not light lamp posts or campfires: those
-are client patches of their own, built for our realm in
-[wow-server](https://github.com/buildthehomelab/wow-server)'s `tools/client-patches`.
+are separate client patches and not part of this module.
 
 The client lights the ground at points about 4 yards apart, further apart on city floors, so the
 edge of the light is soft on open ground and can look blocky on paving.
