@@ -25,8 +25,9 @@ DELETE FROM `creature_template_model` WHERE `CreatureID` = 9503100;
 DELETE FROM `creature_template` WHERE `entry` = 9503100;
 
 DELETE FROM `npc_vendor` WHERE `item` = 90400;
-DELETE FROM `spell_script_names` WHERE `spell_id` = 90400;
-DELETE FROM `spell_dbc` WHERE `ID` = 90400;
+DELETE FROM `spell_script_names` WHERE `spell_id` IN (90400, 90401);
+DELETE FROM `spell_dbc` WHERE `ID` IN (90400, 90401);
 DELETE FROM `item_template` WHERE `entry` = 90400;
 
-DELETE FROM `updates` WHERE `name` LIKE 'mod\_forever\_torch\_%';
+DELETE FROM `updates` WHERE `name` LIKE 'mod\_forever\_torch\_%'
+   OR `name` = '2026_10_19_00_forever_torch_mouth.sql';

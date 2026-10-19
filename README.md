@@ -16,8 +16,8 @@ whose client has dark nights; see [Dark nights](#dark-nights).
 | Item | Night Watchman's Torch: bind on pickup, unique, not used up |
 | Use | By day, or in a cave: lights the torch for 5 minutes. At night: takes it out again after you put it away. 30 second cooldown |
 | Light | Warm orange, strongest at your feet, gone at 22 yards. Everyone nearby sees it |
-| Hand | Left. A weapon in the right hand stays visible |
-| Put away | While your weapons are drawn (melee or ranged), in combat, while swimming, in a capital city, in an animal form, in stealth, in a vehicle. It comes back out by itself |
+| Carried in | Left hand in humanoid form; across the mouth in druid cat, bear, travel, aquatic, flight and moonkin forms, including custom form looks. Water still extinguishes it |
+| Put away | While humanoid weapons are drawn (melee or ranged), in combat, while swimming, in a capital city, in stealth, in a vehicle. It comes back out by itself |
 | Can't be lit | In combat, while swimming, in a capital city |
 
 At night, press your sheathe key (Z by default) to put your weapons away and take the torch out,
@@ -82,7 +82,7 @@ python3 tools/build_patch.py --patch-w patch-W.MPQ --client /path/to/client --ou
 
 - `--patch-w` is that patch. A patch MPQ replaces whole files, so the torch's rows go into its
   copies of `Spell.dbc`, `SpellVisual.dbc`, `SpellVisualKit.dbc`, `SpellVisualEffectName.dbc` and
-  `Item.dbc`. All five have to be in it. Everything else in the patch is copied unchanged.
+  `Item.dbc` and `SpellVisualKitModelAttach.dbc`. All six have to be in it. Everything else in the patch is copied unchanged.
 - `--client` is a 3.3.5a client folder. The torch model is the client's own hand torch
   (`Spells\TorchSpell.m2`) with a stronger light, saved under a new name
   (`Spells\ForeverTorch.m2`), so the quest torches that use the stock model stay as they are.
@@ -91,6 +91,35 @@ python3 tools/build_patch.py --patch-w patch-W.MPQ --client /path/to/client --ou
 
 Give players the new patch in place of the old one. Needs Python 3 and
 [StormLib](https://github.com/ladislav-zezula/StormLib).
+
+### Druid mouth visual (proposed; not yet verified in game)
+
+Druid cat, bear/dire bear, travel, aquatic, both flight forms and moonkin use a separate
+mouth visual (spell 90401). Humanoid form returns to the hand visual (90400). Tree of Life
+keeps the existing form restrictions. The mouth visual uses the model's face attachment (17),
+with the torch rotated across the mouth. Animal forms do not require a humanoid sheath state;
+combat, city, stealth, vehicle and water restrictions still apply. Aquatic form therefore has no
+lit torch while in water. Changing form preserves a manually lit torch's remaining duration.
+Cancelling either carried buff records the same persistent put-away setting.
+
+An existing spell patch can retain its already enhanced torch model:
+
+```bash
+python3 tools/build_patch.py --patch-w patch-z80-spells-and-items.MPQ \
+    --reuse-torch-model --out patch-z80-spells-and-items-new.MPQ
+```
+
+The input must contain `SpellVisualKitModelAttach.dbc` as well as the five original tables.
+The dated `2026_10_19_00_forever_torch_mouth.sql` upgrades existing installations; both spell
+IDs bind to the same script. Deploy the module, SQL and rebuilt client patch together.
+
+Inspection of the downloaded realm patch on October 19, 2026 found face attachment 17 in
+all 90 model files of `patch-z40-druid-forms.MPQ`. This checks attachment availability only:
+mouth fit, rotation, flame placement, animation and light need testing in the game client,
+including stock forms and custom cat, bear, travel, bird, moonkin and aquatic looks. Check
+shifts in both directions, a daytime item timer, right-click cancellation, `.torch on/off`,
+combat, prowl, water entry/exit and relog. No server build, deployment or client test has been
+performed for this change.
 
 ## Configuration
 
@@ -125,8 +154,8 @@ edge of the light is soft on open ground and can look blocky on paving.
 
 ## What it adds to the world database
 
-- Item 90400, Night Watchman's Torch, and its spell 90400 (`spell_dbc`) with a
-  `spell_script_names` row.
+- Item 90400, Night Watchman's Torch, and spells 90400 (hand) and 90401 (mouth), each
+  with a `spell_dbc` and `spell_script_names` row.
 - One `npc_vendor` row for the item on every general goods vendor, picked by title when the SQL
   runs. A vendor you add later needs its own row.
 - Creature 9503100, Night Watch Guard, with its model, gear and five spawns (guids 9503100 to
@@ -162,7 +191,7 @@ On the characters database, ``DELETE FROM `character_settings` WHERE `source` =
 - **"You can't do that here":** you're in a capital city.
 - **The torch isn't in my hand:** it is daytime (it is carried from 19:00 to 06:00 server time),
   your weapons are drawn (press Z), or you put it away by right-clicking the buff: type
-  `.torch on`. In a capital city, in water and in animal forms it stays away. With
+  `.torch on`. In a capital city and in water it stays away. Animal forms carry it in their mouths; humanoid weapons must be sheathed. With
   `ForeverTorch.Carry.RequireItem = 1` the item also has to be in your bags, not the bank.
 - **The torch has a 5 minute timer:** it is daytime, or carrying is off.
 - **A general goods vendor doesn't sell the torch:** the rows are added once, by title, when the
