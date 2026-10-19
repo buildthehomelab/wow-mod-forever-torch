@@ -16,7 +16,7 @@
  * one. It is in every player's hand whenever the hand is free, and has no timer. The client
  * tells the server when weapons are drawn or put back (the sheath state), so a few times a
  * second the player hook below puts the torch away while weapons are drawn, in combat, in water,
- * in a capital city or in an animal form, and brings it back out afterwards. Right-clicking the
+ * in a capital city, and brings it back out afterwards. Right-clicking the
  * buff puts it away for good, kept as a character setting; ".torch on" or using the item takes
  * it out again. With ForeverTorch.Carry.RequireItem only players with the item in their bags
  * carry one. Bots carry none.
@@ -52,6 +52,7 @@ using namespace Acore::ChatCommands;
 namespace
 {
     constexpr uint32 SPELL_NIGHT_WATCHMANS_TORCH = 90400;
+    constexpr uint32 SPELL_MOUTH_TORCH = 90401;
     constexpr uint32 ITEM_NIGHT_WATCHMANS_TORCH = 90400;
     constexpr uint32 QUEST_A_LIGHT_ON_THE_ROAD = 9503100;
     constexpr uint32 NPC_TEXT_FALLEN_WATCHMAN = 9503100;
@@ -139,15 +140,77 @@ namespace
         return hour >= config.nightStart || hour < config.nightEnd;
     }
 
-    // A hand to hold the torch in, and nothing that puts a torch out.
+    bool UsesMouthTorch(Player* player)
+    {
+        if (player->getClass() != CLASS_DRUID)
+            return false;
+
+        switch (player->GetShapeshiftForm())
+        {
+            case FORM_CAT:
+            case FORM_BEAR:
+            case FORM_DIREBEAR:
+            case FORM_TRAVEL:
+            case FORM_AQUA:
+            case FORM_FLIGHT:
+            case FORM_FLIGHT_EPIC:
+            case FORM_MOONKIN:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    Aura* GetTorch(Player* player)
+    {
+        if (Aura* torch = player->GetAura(SPELL_NIGHT_WATCHMANS_TORCH))
+            return torch;
+        return player->GetAura(SPELL_MOUTH_TORCH);
+    }
+
+    void RemoveTorch(Player* player)
+    {
+        player->RemoveAurasDueToSpell(SPELL_NIGHT_WATCHMANS_TORCH);
+        player->RemoveAurasDueToSpell(SPELL_MOUTH_TORCH);
+    }
+
+    // Switching visuals must not refresh a manually lit torch's five-minute timer, or turn
+    // an automatic removal into the player's persistent right-click cancellation.
+    void UpdateTorchVisual(Player* player)
+    {
+        Aura* torch = GetTorch(player);
+        if (!torch)
+            return;
+
+        uint32 wanted = UsesMouthTorch(player) ? SPELL_MOUTH_TORCH : SPELL_NIGHT_WATCHMANS_TORCH;
+        if (torch->GetId() == wanted)
+        {
+            player->RemoveAurasDueToSpell(wanted == SPELL_MOUTH_TORCH
+                ? SPELL_NIGHT_WATCHMANS_TORCH : SPELL_MOUTH_TORCH);
+            return;
+        }
+
+        uint32 previous = torch->GetId();
+        int32 duration = torch->GetDuration();
+        int32 maxDuration = torch->GetMaxDuration();
+        // Keep the old aura if the replacement cannot be created.
+        if (Aura* replacement = player->AddAura(wanted, player))
+        {
+            replacement->SetMaxDuration(maxDuration);
+            replacement->SetDuration(duration);
+            player->RemoveAurasDueToSpell(previous);
+        }
+    }
+
+    // A free hand or an animal mouth, and nothing that puts a torch out.
     bool HasHandFree(Player* player)
     {
         return player->IsAlive()
-            && player->GetSheath() == SHEATH_STATE_UNARMED
+            && (UsesMouthTorch(player) || player->GetSheath() == SHEATH_STATE_UNARMED)
             && (config.inCombat || !player->IsInCombat())
             && !player->IsInWater()
             && (config.inCities || !IsCapitalCity(player->GetZoneId()))
-            && !player->IsInDisallowedMountForm()
+            && (UsesMouthTorch(player) || !player->IsInDisallowedMountForm())
             && !player->HasStealthAura()
             && !player->GetVehicle();
     }
@@ -156,7 +219,8 @@ namespace
     // one, without the five minutes; that is also how the two are told apart.
     void UpdateCarriedTorch(Player* player)
     {
-        Aura* torch = player->GetAura(SPELL_NIGHT_WATCHMANS_TORCH);
+        UpdateTorchVisual(player);
+        Aura* torch = GetTorch(player);
 
         if (!config.enabled || !config.carry || !IsCarryHour())
         {
@@ -188,7 +252,7 @@ namespace
         }
 
         if (!torch)
-            torch = player->AddAura(SPELL_NIGHT_WATCHMANS_TORCH, player);
+            torch = player->AddAura(UsesMouthTorch(player) ? SPELL_MOUTH_TORCH : SPELL_NIGHT_WATCHMANS_TORCH, player);
 
         if (torch && !torch->IsPermanent())
         {
@@ -283,13 +347,13 @@ public:
     void OnPlayerEnterCombat(Player* player, Unit* /*enemy*/) override
     {
         if (!config.inCombat)
-            player->RemoveAurasDueToSpell(SPELL_NIGHT_WATCHMANS_TORCH);
+            RemoveTorch(player);
     }
 
     void OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 /*newArea*/) override
     {
         if (!config.inCities && IsCapitalCity(newZone))
-            player->RemoveAurasDueToSpell(SPELL_NIGHT_WATCHMANS_TORCH);
+            RemoveTorch(player);
     }
 
     void OnPlayerUpdate(Player* player, uint32 diff) override

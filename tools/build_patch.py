@@ -13,6 +13,8 @@ other file in it is copied unchanged. It gains:
   show the torch. It starts as a copy of Has Flaming Torch (45275), the Midsummer torch.
 - SpellVisual.dbc, SpellVisualKit.dbc and SpellVisualEffectName.dbc 90400: the torch in the left
   hand while the aura lasts, so a weapon in the right hand stays where it is.
+- SpellVisualKitModelAttach.dbc 90401: a sideways torch on face attachment 17, used by
+  spell/visual/kit 90401 for druid animal forms.
 - Item.dbc 90400: the item, so the client has its icon. It borrows the Dim Torch's display.
 - Spells\\ForeverTorch.m2 and its .skin: the client's hand torch (Spells\\TorchSpell.m2, taken
   from --client) with a light that reaches. The stock light fades out at 2.2 yards; this one runs
@@ -36,6 +38,8 @@ import sys
 import tempfile
 
 SPELL = ITEM = VISUAL = KIT = EFFECT_NAME = 90400
+MOUTH_SPELL = MOUTH_VISUAL = MOUTH_KIT = MOUTH_ATTACH = 90401
+ATTACH_FACE = 17
 NAME = "Night Watchman's Torch"
 DESCRIPTION = ("Light the torch and carry it for $d. It lights the ground around you. "
                "Fighting, swimming or entering a capital city puts it out.")
@@ -76,7 +80,8 @@ V_STATE_KIT, K_LEFT_HAND, K_RIGHT_WEAPON = 4, 6, 10
 # --- DBC ---------------------------------------------------------------------------------------
 
 def read_dbc(path):
-    data = open(path, "rb").read()
+    with open(path, "rb") as source:
+        data = source.read()
     magic, count, fields, size, strsize = struct.unpack_from("<4s4I", data, 0)
     if magic != b"WDBC" or size != fields * 4:
         sys.exit("%s isn't a plain WDBC file" % path)
@@ -258,7 +263,7 @@ def patch_w(files, args, tmp):
         return "DBFilesClient\\%s.dbc" % table
 
     tables = {}
-    for table in ("Spell", "SpellVisual", "SpellVisualKit", "SpellVisualEffectName", "Item"):
+    for table in ("Spell", "SpellVisual", "SpellVisualKit", "SpellVisualEffectName", "SpellVisualKitModelAttach", "Item"):
         if dbc(table) not in files:
             sys.exit("%s has no %s.dbc" % (args.patch_w, table))
         tables[table] = read_dbc(files[dbc(table)])
@@ -267,6 +272,9 @@ def patch_w(files, args, tmp):
     kits, _, _ = tables["SpellVisualKit"]
     effects, effect_str, _ = tables["SpellVisualEffectName"]
     items, _, _ = tables["Item"]
+    attachments, _, attach_fields = tables["SpellVisualKitModelAttach"]
+    if attach_fields != 10:
+        sys.exit("SpellVisualKitModelAttach.dbc must have 10 fields")
     if spell_fields != SPELL_FIELDS:
         sys.exit("Spell.dbc has %d fields, not %d" % (spell_fields, SPELL_FIELDS))
 
@@ -275,6 +283,10 @@ def patch_w(files, args, tmp):
     claim(kits, KIT, "SpellVisualKit", lambda r: r[K_LEFT_HAND] == EFFECT_NAME)
     claim(visuals, VISUAL, "SpellVisual", lambda r: r[V_STATE_KIT] == KIT)
     claim(items, ITEM, "Item", lambda r: r[5] == ITEM_DISPLAY)
+    claim(spells, MOUTH_SPELL, "Spell", lambda r: string_at(spell_str, r[F_NAME]) == NAME and r[F_VISUAL] == MOUTH_VISUAL)
+    claim(kits, MOUTH_KIT, "SpellVisualKit", lambda r: r[K_LEFT_HAND] == 0 and r[K_RIGHT_WEAPON] == 0)
+    claim(visuals, MOUTH_VISUAL, "SpellVisual", lambda r: r[V_STATE_KIT] == MOUTH_KIT)
+    claim(attachments, MOUTH_ATTACH, "SpellVisualKitModelAttach", lambda r: r[1:4] == [MOUTH_KIT, EFFECT_NAME, ATTACH_FACE])
 
     stock = template(spells, TEMPLATE_SPELL, "Spell.dbc row")
     stock_visual = template(visuals, stock[F_VISUAL], "SpellVisual.dbc row")
@@ -293,11 +305,25 @@ def patch_w(files, args, tmp):
     kit[K_RIGHT_WEAPON] = 0
     kit[K_LEFT_HAND] = EFFECT_NAME
     upsert(kits, kit)
+    mouth_kit = list(kit)
+    mouth_kit[0] = MOUTH_KIT
+    mouth_kit[K_LEFT_HAND] = 0
+    upsert(kits, mouth_kit)
+    # Face attachment follows the head animation on both stock and converted forms.
+    # Rotate the torch sideways across the mouth. These transforms need in-client fitting.
+    def float_bits(value):
+        return struct.unpack("<I", struct.pack("<f", value))[0]
+    upsert(attachments, [MOUTH_ATTACH, MOUTH_KIT, EFFECT_NAME, ATTACH_FACE,
+                         0, 0, 0, float_bits(1.5707963267948966), 0, 0])
 
     visual = stock_visual
     visual[0] = VISUAL
     visual[V_STATE_KIT] = KIT
     upsert(visuals, visual)
+    mouth_visual = list(visual)
+    mouth_visual[0] = MOUTH_VISUAL
+    mouth_visual[V_STATE_KIT] = MOUTH_KIT
+    upsert(visuals, mouth_visual)
 
     spell = stock
     spell[0] = SPELL
@@ -314,12 +340,21 @@ def patch_w(files, args, tmp):
     spell[F_DESCRIPTION] = add_string(spell_str, DESCRIPTION)
     spell[F_AURA_TEXT] = add_string(spell_str, AURA_TEXT)
     upsert(spells, spell)
+    mouth_spell = list(spell)
+    mouth_spell[0] = MOUTH_SPELL
+    mouth_spell[F_VISUAL] = MOUTH_VISUAL
+    upsert(spells, mouth_spell)
 
     upsert(items, [ITEM, ITEM_CLASS_MISC, ITEM_SUBCLASS_OTHER, UNSET, UNSET, ITEM_DISPLAY, 0, 0])
 
     for table in tables:
         rows, strings, fields = tables[table]
         write_dbc(files[dbc(table)], rows, strings, fields)
+
+    if args.reuse_torch_model:
+        if MODEL not in files or SKIN not in files:
+            sys.exit("--reuse-torch-model needs the existing ForeverTorch model and skin")
+        return spell
 
     for stock_name, name in ((STOCK_MODEL, MODEL), (STOCK_SKIN, SKIN)):
         local = os.path.join(tmp, os.path.basename(name.replace("\\", "/")))
@@ -353,18 +388,25 @@ def write_sql(path, spell):
         f.write("-- Generated by tools/build_patch.py from the same Spell.dbc row the client patch gets:\n")
         f.write("-- run the tool again, don't edit this file. A five minute dummy aura on the caster that\n")
         f.write("-- swimming removes; the module's script handles combat and capital cities.\n\n")
-        f.write("DELETE FROM `spell_dbc` WHERE `ID` = %d;\n" % SPELL)
-        f.write("INSERT INTO `spell_dbc` VALUES\n(" + ", ".join(values) + ");\n")
+        f.write("DELETE FROM `spell_dbc` WHERE `ID` IN (90400, 90401);\n")
+        f.write("INSERT INTO `spell_dbc` VALUES\n(" + ", ".join(values) + "),\n")
+        values[0] = str(MOUTH_SPELL)
+        values[F_VISUAL] = str(MOUTH_VISUAL)
+        f.write("(" + ", ".join(values) + ");\n")
     print("wrote", path)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--patch-w", required=True, help="your realm's live spell patch (e.g. patch-W.MPQ)")
-    ap.add_argument("--client", required=True, help="the base client folder (has Data/)")
+    ap.add_argument("--client", help="the base client folder (has Data/)")
     ap.add_argument("--out", required=True, help="the new spell patch")
     ap.add_argument("--sql", help="write the spell's server row here")
+    ap.add_argument("--reuse-torch-model", action="store_true",
+                    help="retain the input patch's existing ForeverTorch model and skin")
     args = ap.parse_args()
+    if not args.client and not args.reuse_torch_model:
+        ap.error("--client is required unless --reuse-torch-model is set")
 
     with tempfile.TemporaryDirectory() as tmp:
         unpacked = os.path.join(tmp, "w")

@@ -36,9 +36,10 @@ DELETE FROM `item_template` WHERE `entry` = 90400;
 INSERT INTO `item_template` (`entry`, `class`, `subclass`, `name`, `displayid`, `Quality`, `Flags`, `BuyPrice`, `SellPrice`, `ItemLevel`, `maxcount`, `stackable`, `delay`, `spellid_1`, `spelltrigger_1`, `spellcharges_1`, `spellcooldown_1`, `spellcategory_1`, `spellcategorycooldown_1`, `bonding`, `description`, `Material`) VALUES
 (90400, 15, 4, 'Night Watchman''s Torch', 12312, 2, 64, 25, 0, 1, 1, 1, 0, 90400, 0, 0, 30000, 0, -1, 1, 'The Night Watch dips its torches in pitch thick enough to last until morning.', -1);
 
-DELETE FROM `spell_script_names` WHERE `spell_id` = 90400;
+DELETE FROM `spell_script_names` WHERE `spell_id` IN (90400, 90401);
 INSERT INTO `spell_script_names` (`spell_id`, `ScriptName`) VALUES
-(90400, 'spell_forever_torch');
+(90400, 'spell_forever_torch'),
+(90401, 'spell_forever_torch');
 
 -- ---------------------------------------------------------------------------------------------
 -- Vendors
