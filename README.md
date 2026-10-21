@@ -92,7 +92,7 @@ python3 tools/build_patch.py --patch-w patch-W.MPQ --client /path/to/client --ou
 Give players the new patch in place of the old one. Needs Python 3 and
 [StormLib](https://github.com/ladislav-zezula/StormLib).
 
-### Druid mouth visual (proposed; not yet verified in game)
+### Druid mouth visual
 
 Druid cat, bear/dire bear, travel, aquatic, both flight forms and moonkin use a separate
 mouth visual (spell 90401). Humanoid form returns to the hand visual (90400). Tree of Life
@@ -113,13 +113,9 @@ The input must contain `SpellVisualKitModelAttach.dbc` as well as the five origi
 The dated `2026_10_19_00_forever_torch_mouth.sql` upgrades existing installations; both spell
 IDs bind to the same script. Deploy the module, SQL and rebuilt client patch together.
 
-Inspection of the downloaded realm patch on October 19, 2026 found face attachment 17 in
-all 90 model files of `patch-z40-druid-forms.MPQ`. This checks attachment availability only:
-mouth fit, rotation, flame placement, animation and light need testing in the game client,
-including stock forms and custom cat, bear, travel, bird, moonkin and aquatic looks. Check
-shifts in both directions, a daytime item timer, right-click cancellation, `.torch on/off`,
-combat, prowl, water entry/exit and relog. No server build, deployment or client test has been
-performed for this change.
+Not yet tried in a game client: the mouth fit, rotation, flame placement, animation and light on stock
+and custom druid forms, shifts in both directions, the daytime item timer, right-click cancelling,
+`.torch on/off`, combat, prowl, water entry and exit, and relog.
 
 ## Configuration
 
