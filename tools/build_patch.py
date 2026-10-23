@@ -17,9 +17,10 @@ other file in it is copied unchanged. It gains:
   spell/visual/kit 90401 for druid animal forms.
 - Item.dbc 90400: the item, so the client has its icon. It borrows the Dim Torch's display.
 - Spells\\ForeverTorch.m2 and its .skin: the client's hand torch (Spells\\TorchSpell.m2, taken
-  from --client) with a light that reaches. The stock light fades out at 2.2 yards; this one runs
-  from 1 to 22 yards, three times its colour's strength, in a deeper orange. Only the light
-  differs from the stock model. Quest torches that use the stock model are not touched.
+  from --client) with a light that reaches. The stock light fades out at 2.2 yards; this one is
+  full out to 15 yards and fades out at 22, in a deeper orange. Only the light differs from the
+  stock model. Quest torches that use the stock model are not touched. With
+  --reuse-torch-model the input's model is kept, but its light is set again.
 
 --sql writes the spell's spell_dbc row from the same Spell.dbc row, so client and server can't
 disagree about it.
@@ -58,7 +59,8 @@ BASE_ARCHIVES = ["common.mpq", "common-2.mpq", "expansion.mpq", "lichking.mpq", 
 STOCK_MODEL, STOCK_SKIN = "Spells\\TorchSpell.m2", "Spells\\TorchSpell00.skin"
 MODEL, SKIN = "Spells\\ForeverTorch.m2", "Spells\\ForeverTorch00.skin"
 MODEL_IN_DBC = "Spells\\ForeverTorch.mdx"   # the client reads .mdx in this table as .m2
-# The light: fade start and end in yards, strength, colour.
+# The light: fade start and end in yards, strength, colour. The approved look (1-22 yards at
+# strength 3); hue_safe() turns it into what the model gets.
 LIGHT = (1.0, 22.0, 3.0, (1.0, 0.55, 0.18))
 # 3.3.5 M2 (version 264): the header's light array, and the tracks inside an M2Light
 M2_LIGHTS, M2_LIGHT_SIZE, POINT_LIGHT = 0x108, 156, 1
@@ -237,14 +239,26 @@ def track_keys(data, at, size):
     return keys
 
 
+def hue_safe(start, end, strength):
+    """Strength 1 with the same red as `strength`: full out to where that still reached 1.
+
+    The client caps each colour channel at 1, so (1.0, 0.55, 0.18) x 3 lit the ground (1, 1, 0.54):
+    yellow, and green next to a red zone light. The world lights' builder (wow-server
+    tools/client-patches/patch_j_lights.py) uses the same rule."""
+    if strength <= 1:
+        return start, end, strength
+    return start + (end - start) * (1 - 1 / strength), end, 1.0
+
+
 def torch_model(path):
-    """Gives the stock hand torch's light its reach, strength and colour, in place."""
+    """Gives the hand torch's light its reach, strength and colour, in place."""
     data = bytearray(open(path, "rb").read())
     magic, version = struct.unpack_from("<4sI", data, 0)
     count, light = struct.unpack_from("<II", data, M2_LIGHTS)
     if magic != b"MD20" or version != 264 or count != 1 or struct.unpack_from("<H", data, light)[0] != POINT_LIGHT:
         sys.exit("%s should be a 3.3.5 model with one point light" % STOCK_MODEL)
     start, end, strength, colour = LIGHT
+    start, end, strength = hue_safe(start, end, strength)
     for track, value in ((ATTENUATION_START, start), (ATTENUATION_END, end), (DIFFUSE_INTENSITY, strength)):
         keys = track_keys(data, light + track, 4)
         if not keys:
@@ -354,6 +368,7 @@ def patch_w(files, args, tmp):
     if args.reuse_torch_model:
         if MODEL not in files or SKIN not in files:
             sys.exit("--reuse-torch-model needs the existing ForeverTorch model and skin")
+        torch_model(files[MODEL])
         return spell
 
     for stock_name, name in ((STOCK_MODEL, MODEL), (STOCK_SKIN, SKIN)):
@@ -403,7 +418,7 @@ def main():
     ap.add_argument("--out", required=True, help="the new spell patch")
     ap.add_argument("--sql", help="write the spell's server row here")
     ap.add_argument("--reuse-torch-model", action="store_true",
-                    help="retain the input patch's existing ForeverTorch model and skin")
+                    help="retain the input patch's existing ForeverTorch model and skin (its light is set again)")
     args = ap.parse_args()
     if not args.client and not args.reuse_torch_model:
         ap.error("--client is required unless --reuse-torch-model is set")

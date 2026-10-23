@@ -1,5 +1,6 @@
 """Patch invariants, without a client installation or StormLib."""
 import importlib.util
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,22 @@ from types import SimpleNamespace
 spec = importlib.util.spec_from_file_location('torch_patch', Path(__file__).parents[1] / 'tools/build_patch.py')
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
+
+
+def tiny_model():
+    """A 3.3.5 model header with one point light whose tracks have one key each."""
+    light = 0x200
+    data = bytearray(light + b.M2_LIGHT_SIZE + 0x100)
+    struct.pack_into("<4sI", data, 0, b"MD20", 264)
+    struct.pack_into("<II", data, b.M2_LIGHTS, 1, light)
+    struct.pack_into("<H", data, light, b.POINT_LIGHT)
+    at = light + b.M2_LIGHT_SIZE
+    for track, size in ((b.DIFFUSE_COLOUR, 12), (b.DIFFUSE_INTENSITY, 4),
+                        (b.ATTENUATION_START, 4), (b.ATTENUATION_END, 4)):
+        struct.pack_into("<II", data, light + track + 12, 1, at)  # one animation...
+        struct.pack_into("<II", data, at, 1, at + 8)              # ...with one key
+        at += 8 + size
+    return bytes(data)
 
 
 class MouthPatchTests(unittest.TestCase):
@@ -33,9 +50,9 @@ class MouthPatchTests(unittest.TestCase):
             path = self.root / (name + '.dbc')
             b.write_dbc(path, rows, bytearray(b'\0'), fields)
             self.files['DBFilesClient\\' + name + '.dbc'] = str(path)
-        for name in (b.MODEL, b.SKIN):
+        for name, data in ((b.MODEL, tiny_model()), (b.SKIN, b'existing asset')):
             path = self.root / name.split('\\')[-1]
-            path.write_bytes(b'existing asset')
+            path.write_bytes(data)
             self.files[name] = str(path)
         self.args = SimpleNamespace(patch_w='fixture', reuse_torch_model=True)
 
@@ -59,6 +76,20 @@ class MouthPatchTests(unittest.TestCase):
         before = {n: Path(p).read_bytes() for n, p in self.files.items()}
         self.patch()
         self.assertEqual(before, {n: Path(p).read_bytes() for n, p in self.files.items()})
+
+    def test_reused_model_gets_the_hue_safe_light(self):
+        self.patch()
+        data = Path(self.files[b.MODEL]).read_bytes()
+        light = struct.unpack_from('<I', data, b.M2_LIGHTS + 4)[0]
+
+        def key(track, fmt):
+            return struct.unpack_from(fmt, data, b.track_keys(data, light + track, 4)[0])
+
+        self.assertEqual(key(b.DIFFUSE_INTENSITY, '<f'), (1.0,))
+        self.assertEqual(key(b.ATTENUATION_START, '<f'), (15.0,))
+        self.assertEqual(key(b.ATTENUATION_END, '<f'), (22.0,))
+        self.assertEqual(key(b.DIFFUSE_COLOUR, '<3f'), struct.unpack('<3f', struct.pack('<3f', 1.0, 0.55, 0.18)))
+        self.assertEqual(Path(self.files[b.SKIN]).read_bytes(), b'existing asset')
 
     def test_occupied_attachment_id_is_rejected(self):
         path = self.files['DBFilesClient\\SpellVisualKitModelAttach.dbc']
